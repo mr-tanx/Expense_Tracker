@@ -18,13 +18,25 @@ import {
 } from "../storage/expenseStorage";
 import { generatePDF } from "../utils/pdf";
 
+/* ---------------- COLORS ---------------- */
+
+const COLORS = {
+  textPrimary: "#212121",
+  textSecondary: "#616161",
+  white: "#ffffff",
+  background: "#f4f6f8",
+  card: "#ffffff",
+  success: "#2e7d32",
+  danger: "#d32f2f",
+};
+
 export default function HomeScreen() {
   /* ---------------- STATE ---------------- */
 
   const [initialBalance, setInitialBalance] = useState(null);
-  const [inputBalance, setInputBalance] = useState("");
+  const [cashInput, setCashInput] = useState("");
+  const [onlineInput, setOnlineInput] = useState("");
   const [transactions, setTransactions] = useState([]);
-
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
   const [mode, setMode] = useState("Cash");
@@ -32,31 +44,55 @@ export default function HomeScreen() {
   /* ---------------- LOAD DATA ---------------- */
 
   useEffect(() => {
-    loadInitialBalance().then((b) => b !== null && setInitialBalance(b));
+    loadInitialBalance().then((b) => b && setInitialBalance(b));
     loadExpenses().then(setTransactions);
   }, []);
 
-  /* ---------------- SAVE INITIAL BALANCE ---------------- */
+  /* ---------------- OPENING BALANCE ---------------- */
 
   const saveBalanceHandler = async () => {
-    const value = Number(inputBalance);
-    if (!value || value <= 0) return;
+    const cash = Number(cashInput) || 0;
+    const online = Number(onlineInput) || 0;
 
-    await saveInitialBalance(value);
-    setInitialBalance(value);
-    setInputBalance("");
+    if (cash <= 0 && online <= 0) {
+      Alert.alert(
+        "Opening balance required",
+        "Please enter cash or online balance 🙂"
+      );
+      return;
+    }
+
+    const balanceObj = { cash, online };
+    await saveInitialBalance(balanceObj);
+    setInitialBalance(balanceObj);
+    setCashInput("");
+    setOnlineInput("");
   };
 
   /* ---------------- ADD TRANSACTION ---------------- */
 
   const addTransaction = async (type) => {
-    if (!title || !amount) return;
+    const cleanTitle = title.trim();
+
+    if (!cleanTitle) {
+      Alert.alert("Missing title", "Please enter what you spent / got 🙂");
+      return;
+    }
+
+    if (!amount.trim()) {
+      Alert.alert("Missing amount", "Please enter the amount 🙂");
+      return;
+    }
+
     const amt = Number(amount);
-    if (amt <= 0) return;
+    if (isNaN(amt) || amt <= 0) {
+      Alert.alert("Invalid amount", "Amount should be greater than zero 🙂");
+      return;
+    }
 
     const txn = {
       id: Date.now().toString(),
-      title,
+      title: cleanTitle,
       amount: amt,
       mode,
       type,
@@ -73,33 +109,37 @@ export default function HomeScreen() {
     setMode("Cash");
   };
 
-  /* ---------------- BALANCE CALCULATION ---------------- */
+  /* ---------------- BALANCE ---------------- */
 
   const cashDebit = transactions
-    .filter(t => t.type === "DEBIT" && t.mode === "Cash")
+    .filter((t) => t.type === "DEBIT" && t.mode === "Cash")
     .reduce((s, t) => s + t.amount, 0);
 
   const cashCredit = transactions
-    .filter(t => t.type === "CREDIT" && t.mode === "Cash")
+    .filter((t) => t.type === "CREDIT" && t.mode === "Cash")
     .reduce((s, t) => s + t.amount, 0);
 
   const onlineDebit = transactions
-    .filter(t => t.type === "DEBIT" && t.mode === "Online")
+    .filter((t) => t.type === "DEBIT" && t.mode === "Online")
     .reduce((s, t) => s + t.amount, 0);
 
   const onlineCredit = transactions
-    .filter(t => t.type === "CREDIT" && t.mode === "Online")
+    .filter((t) => t.type === "CREDIT" && t.mode === "Online")
     .reduce((s, t) => s + t.amount, 0);
 
   const cashBalance =
     initialBalance !== null
-      ? initialBalance + cashCredit - cashDebit
+      ? initialBalance.cash + cashCredit - cashDebit
       : 0;
 
-  const onlineBalance = onlineCredit - onlineDebit;
+  const onlineBalance =
+    initialBalance !== null
+      ? initialBalance.online + onlineCredit - onlineDebit
+      : 0;
+
   const totalBalance = cashBalance + onlineBalance;
 
-  /* ---------------- RUNNING BALANCE (CURRENT STYLE) ---------------- */
+  /* ---------------- RUNNING BALANCE ---------------- */
 
   const sortedDesc = [...transactions].sort(
     (a, b) => Number(b.id) - Number(a.id)
@@ -116,7 +156,7 @@ export default function HomeScreen() {
     return { ...t, runningBalance: balanceAfter };
   });
 
-  /* ---------------- RESET WITH EXPORT ---------------- */
+  /* ---------------- RESET ---------------- */
 
   const resetApp = () => {
     Alert.alert(
@@ -152,39 +192,44 @@ export default function HomeScreen() {
 
   return (
     <ScrollView style={styles.container}>
-      {/* HEADER */}
       <Text style={styles.header}>💸 My Expenses</Text>
-      <Text style={styles.subHeader}>
-        Track money. Stay chill 😌
-      </Text>
+      <Text style={styles.subHeader}>Track money. Stay chill 😌</Text>
 
       {initialBalance === null ? (
-        /* INITIAL BALANCE */
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Opening Balance</Text>
+          <Text style={styles.sectionTitle}>Set Opening Balance</Text>
+
           <TextInput
             style={styles.input}
+            placeholder="Cash amount 💵"
+            placeholderTextColor={COLORS.textSecondary}
             keyboardType="numeric"
-            placeholder="How much cash do you have?"
-            value={inputBalance}
-            onChangeText={setInputBalance}
+            value={cashInput}
+            onChangeText={setCashInput}
           />
-          <Button title="Save Balance" onPress={saveBalanceHandler} />
+
+          <TextInput
+            style={styles.input}
+            placeholder="Online amount 💳"
+            placeholderTextColor={COLORS.textSecondary}
+            keyboardType="numeric"
+            value={onlineInput}
+            onChangeText={setOnlineInput}
+          />
+
+          <Button title="Continue" onPress={saveBalanceHandler} />
         </View>
       ) : (
         <>
-          {/* BALANCE CARD */}
           <View style={styles.balanceCard}>
             <Text style={styles.balanceAmount}>₹ {totalBalance}</Text>
             <Text style={styles.balanceHint}>Available Balance</Text>
-
             <View style={styles.balanceRow}>
               <Text style={styles.balanceText}>💵 Cash: ₹ {cashBalance}</Text>
               <Text style={styles.balanceText}>💳 Online: ₹ {onlineBalance}</Text>
             </View>
           </View>
 
-          {/* ADD TRANSACTION */}
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>
               What did you spend / get? 🤔
@@ -192,14 +237,16 @@ export default function HomeScreen() {
 
             <TextInput
               style={styles.input}
-              placeholder="Food, Salary, Rent…"
+              placeholder="What was it? (Food, Salary, Rent)"
+              placeholderTextColor={COLORS.textSecondary}
               value={title}
               onChangeText={setTitle}
             />
 
             <TextInput
               style={styles.input}
-              placeholder="Amount"
+              placeholder="How much? (₹)"
+              placeholderTextColor={COLORS.textSecondary}
               keyboardType="numeric"
               value={amount}
               onChangeText={setAmount}
@@ -207,66 +254,53 @@ export default function HomeScreen() {
 
             <View style={styles.row}>
               <TouchableOpacity
-                style={[
-                  styles.modeBtn,
-                  mode === "Cash" && styles.active,
-                ]}
+                style={[styles.modeBtn, mode === "Cash" && styles.active]}
                 onPress={() => setMode("Cash")}
               >
-                <Text>💵 Cash</Text>
+                <Text style={styles.modeBtnText}>💵 Cash</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[
-                  styles.modeBtn,
-                  mode === "Online" && styles.active,
-                ]}
+                style={[styles.modeBtn, mode === "Online" && styles.active]}
                 onPress={() => setMode("Online")}
               >
-                <Text>💳 Online</Text>
+                <Text style={styles.modeBtnText}>💳 Online</Text>
               </TouchableOpacity>
             </View>
 
             <Button title="💸 I Spent" onPress={() => addTransaction("DEBIT")} />
             <View style={{ height: 8 }} />
-            <Button title="💰 I Got Money" onPress={() => addTransaction("CREDIT")} />
+            <Button
+              title="💰 I Got Money"
+              onPress={() => addTransaction("CREDIT")}
+            />
           </View>
 
-          {/* TRANSACTIONS */}
-          <View>
-            <Text style={styles.sectionTitle}>Recent Activity</Text>
+          <Text style={styles.sectionTitle}>Recent Activity</Text>
 
-            {transactionsWithBalance.length === 0 ? (
-              <Text style={styles.emptyText}>
-                No money drama yet 😌
+          {transactionsWithBalance.map((t) => (
+            <View key={t.id} style={styles.txnCard}>
+              <View>
+                <Text style={styles.txnTitle}>{t.title}</Text>
+                <Text style={styles.txnMeta}>
+                  {t.mode} • {t.date} {t.time}
+                </Text>
+                <Text style={styles.txnBalance}>
+                  Balance: ₹ {t.runningBalance}
+                </Text>
+              </View>
+
+              <Text
+                style={[
+                  styles.txnAmount,
+                  { color: t.type === "DEBIT" ? COLORS.danger : COLORS.success },
+                ]}
+              >
+                {t.type === "DEBIT" ? "-" : "+"}₹{t.amount}
               </Text>
-            ) : (
-              transactionsWithBalance.map((t) => (
-                <View key={t.id} style={styles.txnCard}>
-                  <View>
-                    <Text style={styles.txnTitle}>{t.title}</Text>
-                    <Text style={styles.txnMeta}>
-                      {t.mode} • {t.date} {t.time}
-                    </Text>
-                    <Text style={styles.txnBalance}>
-                      Balance: ₹ {t.runningBalance}
-                    </Text>
-                  </View>
+            </View>
+          ))}
 
-                  <Text
-                    style={[
-                      styles.txnAmount,
-                      { color: t.type === "DEBIT" ? "#d32f2f" : "#388e3c" },
-                    ]}
-                  >
-                    {t.type === "DEBIT" ? "-" : "+"}₹{t.amount}
-                  </Text>
-                </View>
-              ))
-            )}
-          </View>
-
-          {/* EXPORT & RESET */}
           <View style={styles.card}>
             <Button
               title="📄 Export Transactions (PDF)"
@@ -275,11 +309,7 @@ export default function HomeScreen() {
               }
             />
             <View style={{ height: 10 }} />
-            <Button
-              title="💣 Reset App"
-              color="#d32f2f"
-              onPress={resetApp}
-            />
+            <Button title="💣 Reset App" color={COLORS.danger} onPress={resetApp} />
           </View>
         </>
       )}
@@ -293,22 +323,24 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
-    backgroundColor: "#f4f6f8",
+    backgroundColor: COLORS.background,
   },
 
   header: {
     fontSize: 28,
     fontWeight: "bold",
     textAlign: "center",
+    color: COLORS.textPrimary,
   },
+
   subHeader: {
     textAlign: "center",
-    color: "#666",
+    color: COLORS.textSecondary,
     marginBottom: 20,
   },
 
   card: {
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.card,
     padding: 16,
     borderRadius: 14,
     marginBottom: 16,
@@ -316,33 +348,37 @@ const styles = StyleSheet.create({
   },
 
   balanceCard: {
-    backgroundColor: "#2e7d32",
+    backgroundColor: COLORS.success,
     padding: 20,
     borderRadius: 16,
     marginBottom: 20,
   },
+
   balanceAmount: {
     fontSize: 32,
     fontWeight: "bold",
-    color: "#fff",
+    color: COLORS.white,
   },
+
   balanceHint: {
     color: "#e8f5e9",
     marginBottom: 10,
   },
+
   balanceRow: {
     flexDirection: "row",
     justifyContent: "space-between",
   },
+
   balanceText: {
-    color: "#fff",
-    fontSize: 14,
+    color: COLORS.white,
   },
 
   sectionTitle: {
     fontWeight: "bold",
     fontSize: 16,
     marginBottom: 10,
+    color: COLORS.textPrimary,
   },
 
   input: {
@@ -351,7 +387,7 @@ const styles = StyleSheet.create({
     padding: 10,
     marginVertical: 8,
     borderRadius: 8,
-    backgroundColor: "#fff",
+    color: COLORS.textPrimary,
   },
 
   row: {
@@ -367,13 +403,20 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     width: "48%",
     alignItems: "center",
+    backgroundColor: COLORS.card,
   },
+
+  modeBtnText: {
+    color: COLORS.textPrimary,
+    fontWeight: "600",
+  },
+
   active: {
     backgroundColor: "#c8e6c9",
   },
 
   txnCard: {
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.card,
     padding: 14,
     borderRadius: 12,
     marginBottom: 12,
@@ -381,27 +424,26 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
   },
+
   txnTitle: {
     fontWeight: "bold",
     fontSize: 16,
+    color: COLORS.textPrimary,
   },
+
   txnMeta: {
     fontSize: 12,
-    color: "#666",
+    color: COLORS.textSecondary,
   },
+
   txnBalance: {
     fontSize: 12,
-    color: "#2e7d32",
+    color: COLORS.success,
     marginTop: 4,
   },
+
   txnAmount: {
     fontWeight: "bold",
     fontSize: 16,
-  },
-
-  emptyText: {
-    textAlign: "center",
-    color: "#666",
-    marginVertical: 20,
   },
 });
