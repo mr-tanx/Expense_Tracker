@@ -1,4 +1,7 @@
 # ExpenseTracker
+
+[Download APK here :](https://expo.dev/accounts/tanx9/projects/ExpenseTracker/builds/139b036e-5a65-43b3-9cab-0cf2bbaaecbb)
+
 Built a user-friendly expense tracker mobile app using React Native and Expo, featuring cash/online balance tracking, transaction history, and offline persistence.
 💸 ExpenseTracker (React Native + Expo)
 
